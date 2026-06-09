@@ -1,0 +1,90 @@
+name: triage
+description: >-
+  Run triage — the environment doctor — in CI. Installs the triage CLI from
+  lolay/triage releases (tool-cache aware) and runs the selected profile.
+author: lolay
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  version:
+    description: triage CLI version to install (e.g. 0.3.1). Defaults to the version pinned by this action release (VERSION file).
+    required: false
+    default: ''
+  profile:
+    description: Profile to run (triage --profile). Omit for the default profile.
+    required: false
+    default: ''
+  config:
+    description: Path to triage.yaml (file or directory). Omit to use the working directory's discovered config.
+    required: false
+    default: ''
+  strict:
+    description: Treat warnings as errors (triage --strict).
+    required: false
+    default: 'false'
+  severity:
+    description: Use the severity-graded exit ladder (triage --severity).
+    required: false
+    default: 'false'
+  json:
+    description: Emit machine-readable JSON (triage --json).
+    required: false
+    default: 'false'
+  quiet:
+    description: Suppress passing checks; show only warnings/errors (triage --quiet).
+    required: false
+    default: 'false'
+  verbose:
+    description: Replay failed-check output to stderr (triage --verbose).
+    required: false
+    default: 'false'
+  command-log:
+    description: Path to write the per-check command log (triage --command-log <path>). Empty disables it.
+    required: false
+    default: ''
+  jobs:
+    description: Max concurrent checks (triage --jobs). Empty uses the CLI default (~NumCPU); 1 = sequential.
+    required: false
+    default: ''
+  working-directory:
+    description: Directory to run triage in.
+    required: false
+    default: '.'
+  args:
+    description: Escape hatch for any other/future triage flags, space-separated (e.g. "--jobs 2 --var key=val").
+    required: false
+    default: ''
+
+outputs:
+  version:
+    description: Resolved triage CLI version that was installed.
+    value: ${{ steps.install.outputs.version }}
+  exit-code:
+    description: Raw exit code returned by triage.
+    value: ${{ steps.run.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      run: bash "${GITHUB_ACTION_PATH}/install.sh"
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+    - id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bash "${GITHUB_ACTION_PATH}/run.sh"
+      env:
+        INPUT_PROFILE: ${{ inputs.profile }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_STRICT: ${{ inputs.strict }}
+        INPUT_SEVERITY: ${{ inputs.severity }}
+        INPUT_JSON: ${{ inputs.json }}
+        INPUT_QUIET: ${{ inputs.quiet }}
+        INPUT_VERBOSE: ${{ inputs.verbose }}
+        INPUT_COMMAND_LOG: ${{ inputs.command-log }}
+        INPUT_JOBS: ${{ inputs.jobs }}
+        INPUT_ARGS: ${{ inputs.args }}

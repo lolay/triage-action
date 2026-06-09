@@ -1,0 +1,9 @@
+# triage.yaml — dogfood config for lolay/triage-action CI smoke tests.
+
+default:
+  - tool: git
+    group: Core
+    hint: https://git-scm.com
+
+ci:
+  extends: [default]
