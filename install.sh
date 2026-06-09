@@ -31,8 +31,8 @@ if [[ ! -x "${tool_dir}/triage" && ! -x "${tool_dir}/triage.exe" ]]; then
   curl --proto '=https' --tlsv1.2 -fsSL -o "${tmp}/${asset}"        "${base}/${asset}"
   curl --proto '=https' --tlsv1.2 -fsSL -o "${tmp}/checksums.txt"   "${base}/checksums.txt"
   # Verify: sha256sum on Linux, shasum -a 256 on macOS.
-  ( cd "$tmp" && grep " ${asset}\$" checksums.txt \
-      | { command -v sha256sum >/dev/null && sha256sum -c - || shasum -a 256 -c -; } )
+  ( cd "$tmp" && grep " ${asset}\$" checksums.txt | \
+      if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi )
   mkdir -p "$tool_dir"
   if [[ "$ext" == zip ]]; then unzip -q "${tmp}/${asset}" -d "$tool_dir";
   else tar -xzf "${tmp}/${asset}" -C "$tool_dir"; fi
