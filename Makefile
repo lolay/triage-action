@@ -7,7 +7,7 @@ SHELL := bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init lint shellcheck test ci pre-commit doctor clean tag promote \
+.PHONY: help init build lint format shellcheck test ci pre-commit doctor clean tag promote \
         gh-runs-list gh-runs-watch gh-runs-status
 
 define confirm
@@ -22,10 +22,13 @@ GH_LIMIT ?= 50
 ##@ Develop
 
 help: ## Show this help
-	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*?##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2} /^##@/ {printf "\n\033[1m%s\033[0m\n", substr($$0,5)}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_.-]+:.*?##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2} /^##@/ {printf "\n\033[1m%s\033[0m\n", substr($$0,5)}' $(MAKEFILE_LIST)
 
 init: ## Verify repo layout (no dependencies to download)
 	@test -f action.yml && test -f install.sh && test -f run.sh && test -f VERSION
+
+build: ## No-op: composite action ships bash + action.yml, nothing to compile
+	@echo "nothing to build (composite action — bash + action.yml)"
 
 lint: ## actionlint on action.yml and workflow files
 	@set -o pipefail; \
@@ -44,6 +47,9 @@ shellcheck: ## Shellcheck install.sh and run.sh
 	  echo "shellcheck not found — install: brew install shellcheck (CI always runs it)"; \
 	  exit 1; \
 	fi
+
+format: ## No-op: no shell formatter configured (shellcheck via lint is the gate)
+	@echo "nothing to format (no formatter configured)"
 
 test: lint shellcheck ## Lint plus local script sanity (install smoke runs in CI)
 
@@ -87,15 +93,25 @@ gh-runs-watch: ## Watch this repo's in-flight Actions runs until each completes
 gh-runs-status: ## Show pass/fail of the last completed run per workflow
 	@out=$$(gh run list --limit $(GH_LIMIT) \
 	  --json conclusion,workflowName,headBranch,url,status,updatedAt \
-	  --jq '[.[] | select(.status == "completed")] | group_by(.workflowName) | .[] | (sort_by(.updatedAt) | last) | "\(.conclusion)\t\(.workflowName)\t\(.headBranch)\t\(.url)"' \
+	  --jq '[.[] | select(.status == "completed")] | group_by(.workflowName) | map(sort_by(.updatedAt) | last) | sort_by(.updatedAt) | .[] | (now - (.updatedAt | fromdateiso8601)) as $$age | "\(.conclusion)\t\(.workflowName)\t\(.headBranch)\t\(.url)\t\($$age | floor)"' \
 	  2>&1) \
 	  || { printf '  \033[33m⚠\033[0m gh run list failed (auth? run `gh auth login`)\n'; exit 0; }; \
 	if [ -z "$$out" ]; then printf '  \033[2mno completed runs\033[0m\n'; exit 0; fi; \
-	printf '%s\n' "$$out" | while IFS=$$'\t' read -r conclusion name branch url; do \
-	  if [ "$$conclusion" = "success" ]; then icon="\033[32m✓\033[0m"; \
-	  else icon="\033[31m✗\033[0m"; fi; \
-	  printf "  $$icon  %-24s  %-14s  %s\n" "$$name" "$$branch" "$$url"; \
-	done
+	esc=$$(printf '\033'); \
+	printf '%s\n' "$$out" | while IFS=$$'\t' read -r conclusion name branch url age_secs; do \
+	  if [ "$$conclusion" = "success" ]; then mark="ok"; \
+	  elif [ "$$conclusion" = "skipped" ] || [ "$$conclusion" = "neutral" ]; then mark="skip"; \
+	  else mark="fail"; fi; \
+	  if [ "$$age_secs" -lt 60 ]; then age="$${age_secs}s"; \
+	  elif [ "$$age_secs" -lt 3600 ]; then age="$$((age_secs / 60))m"; \
+	  elif [ "$$age_secs" -lt 86400 ]; then age="$$((age_secs / 3600))h"; \
+	  else age="$$((age_secs / 86400))d"; fi; \
+	  printf '%s\t%s\t%s\t%s\t%s\n' "$$mark" "$$name" "$$branch" "$$age" "$$url"; \
+	done | column -t -s "$$(printf '\t')" \
+	| sed -e "s/^ok  /$${esc}[32m✓$${esc}[0m   /" \
+	      -e "s/^skip/$${esc}[2m-$${esc}[0m   /" \
+	      -e "s/^fail/$${esc}[31m✗$${esc}[0m   /" \
+	      -e 's/^/  /'
 
 ##@ Release
 
@@ -104,6 +120,8 @@ tag: ## Create and push git tag VERSION=x.y.z (triggers release workflow)
 	@test -n "$(VERSION)" || { echo "VERSION=x.y.z required" >&2; exit 1; }
 	git tag "v$(VERSION)"
 	git push origin "v$(VERSION)"
+
+##@ Danger
 
 promote: ## Force-push floating tags vX.Y and vX for VERSION=x.y.z (CONFIRM_PROMOTE=1)
 	$(call confirm,PROMOTE)

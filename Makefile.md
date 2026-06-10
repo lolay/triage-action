@@ -14,15 +14,20 @@ Runtime install/run on **consumer** GitHub Actions runners use `install.sh` and
 | --- | --- | --- |
 | `help` | Develop | List targets (default goal) |
 | `init` | Develop | Verify repo layout |
+| `build` | Develop | Documented no-op (composite action — nothing to compile) |
 | `lint` | Develop | `actionlint` on `action.yml` and workflows |
+| `format` | Develop | Documented no-op (no shell formatter configured) |
 | `shellcheck` | Develop | `shellcheck install.sh run.sh` |
 | `test` | Develop | `lint` + `shellcheck` |
 | `ci` | Develop | Full pre-push gate (`test`) |
 | `pre-commit` | Develop | Alias of `ci` |
 | `doctor` | Develop | Check for `actionlint`, `shellcheck`, `gh` |
 | `clean` | Develop | Remove `.tmp/` |
+| `gh-runs-list` | GitHub | In-flight Actions runs (`status != completed`) |
+| `gh-runs-watch` | GitHub | Watch active runs to completion |
+| `gh-runs-status` | GitHub | Last completed run per workflow; `skipped`/`neutral` are not failures |
 | `tag` | Release | Create + push `v$(VERSION)` (`CONFIRM_TAG=1`) |
-| `promote` | Release | Force-push floating `vX.Y` / `vX` (`CONFIRM_PROMOTE=1`) |
+| `promote` | Danger | Force-push floating `vX.Y` / `vX` (`CONFIRM_PROMOTE=1`) |
 
 ## CI workflow
 

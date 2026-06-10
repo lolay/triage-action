@@ -5,8 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- `make gh-runs-status` now uses three-bucket conclusions (`skipped`/`neutral`
+  render dim instead of as failures) and shows a run-age column.
+- `make promote` moved under the `Danger` help section (force-pushes remote
+  tags; still requires `CONFIRM_PROMOTE=1`).
+- `make help` recognizes target names containing digits and dots.
+
 ### Added
 
+- `make build` and `make format` documented no-op stubs, completing the
+  standard core verb set.
 - Initial composite action scaffold: `action.yml`, `install.sh`, `run.sh`, and
   root `VERSION` file for deterministic CLI pinning on floating action tags.
 - Typed inputs for CI-relevant flags (`strict`, `severity`, `json`, `quiet`,
