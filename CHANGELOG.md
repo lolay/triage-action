@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-15
+
 ### Changed
 
 - `make gh-runs-status` now uses three-bucket conclusions (`skipped`/`neutral`
