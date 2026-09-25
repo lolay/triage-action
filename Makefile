@@ -14,7 +14,7 @@ define confirm
 $(if $(CONFIRM_$(1)),,$(error Set CONFIRM_$(1)=1 to run $@))
 endef
 
-ACTIONLINT_VERSION ?= 1.7.7
+ACTIONLINT_VERSION ?= 1.7.12
 
 # Maximum recent runs to fetch for gh-runs-list / gh-runs-watch.
 GH_LIMIT ?= 50

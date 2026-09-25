@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- CI: `actions/checkout` v7 (was v6) and actionlint pinned to 1.7.12
+  (was 1.7.7) in `ci.yml` and the `Makefile`.
+
 ## [0.4.0] - 2026-06-15
 
 ### Changed
