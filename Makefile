@@ -7,14 +7,23 @@ SHELL := bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init build lint format shellcheck test ci pre-commit doctor clean tag promote \
+.PHONY: help init install-tools build lint format shellcheck test ci pre-commit doctor clean tag promote \
         gh-runs-list gh-runs-watch gh-runs-status
 
 define confirm
 $(if $(CONFIRM_$(1)),,$(error Set CONFIRM_$(1)=1 to run $@))
 endef
 
+# Pinned tool versions — the single source of truth. CI installs both via
+# `make install-tools`; Renovate bumps these lines (custom managers in
+# lolay/triage .github/renovate-shared.json). Keep the `NAME ?= X.Y.Z` shape.
 ACTIONLINT_VERSION ?= 1.7.12
+SHELLCHECK_VERSION ?= v0.11.0
+
+# Repo-local tool dir (gitignored). lint/shellcheck prefer it over PATH so the
+# pinned versions win once `make install-tools` has run.
+TOOLS_BIN ?= $(CURDIR)/.tools/bin
+export PATH := $(TOOLS_BIN):$(PATH)
 
 # Maximum recent runs to fetch for gh-runs-list / gh-runs-watch.
 GH_LIMIT ?= 50
@@ -27,6 +36,33 @@ help: ## Show this help
 init: ## Verify repo layout (no dependencies to download)
 	@test -f action.yml && test -f install.sh && test -f run.sh && test -f VERSION
 
+install-tools: ## Install pinned actionlint + shellcheck into .tools/bin (no-op if already pinned)
+	@set -euo pipefail; \
+	mkdir -p "$(TOOLS_BIN)"; \
+	case "$$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; *) echo "unsupported OS: $$(uname -s)" >&2; exit 1 ;; esac; \
+	case "$$(uname -m)" in x86_64|amd64) al_arch=amd64; sc_arch=x86_64 ;; arm64|aarch64) al_arch=arm64; sc_arch=aarch64 ;; *) echo "unsupported arch: $$(uname -m)" >&2; exit 1 ;; esac; \
+	tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
+	if [ "$$("$(TOOLS_BIN)/actionlint" -version 2>/dev/null | head -1)" = "$(ACTIONLINT_VERSION)" ]; then \
+	  echo "actionlint $(ACTIONLINT_VERSION) already installed"; \
+	else \
+	  echo "Installing actionlint $(ACTIONLINT_VERSION)..."; \
+	  base="https://github.com/rhysd/actionlint/releases/download/v$(ACTIONLINT_VERSION)"; \
+	  tarball="actionlint_$(ACTIONLINT_VERSION)_$${os}_$${al_arch}.tar.gz"; \
+	  curl -sSfL -o "$$tmp/$$tarball" "$$base/$$tarball"; \
+	  curl -sSfL -o "$$tmp/checksums.txt" "$$base/actionlint_$(ACTIONLINT_VERSION)_checksums.txt"; \
+	  (cd "$$tmp" && grep " $$tarball\$$" checksums.txt | { command -v sha256sum >/dev/null && sha256sum -c - || shasum -a 256 -c -; }); \
+	  tar -xzf "$$tmp/$$tarball" -C "$$tmp" actionlint; \
+	  mv "$$tmp/actionlint" "$(TOOLS_BIN)/actionlint"; \
+	fi; \
+	if "$(TOOLS_BIN)/shellcheck" --version 2>/dev/null | grep -qx "version: $(SHELLCHECK_VERSION:v%=%)"; then \
+	  echo "shellcheck $(SHELLCHECK_VERSION) already installed"; \
+	else \
+	  echo "Installing shellcheck $(SHELLCHECK_VERSION)..."; \
+	  curl -sSfL "https://github.com/koalaman/shellcheck/releases/download/$(SHELLCHECK_VERSION)/shellcheck-$(SHELLCHECK_VERSION).$${os}.$${sc_arch}.tar.xz" \
+	    | tar -xJf - -C "$$tmp"; \
+	  mv "$$tmp/shellcheck-$(SHELLCHECK_VERSION)/shellcheck" "$(TOOLS_BIN)/shellcheck"; \
+	fi
+
 build: ## No-op: composite action ships bash + action.yml, nothing to compile
 	@echo "nothing to build (composite action — bash + action.yml)"
 
@@ -35,7 +71,7 @@ lint: ## actionlint on action.yml and workflow files
 	if command -v actionlint >/dev/null 2>&1; then \
 	  actionlint; \
 	else \
-	  echo "actionlint not found — install: brew install actionlint (CI always runs it)"; \
+	  echo "actionlint not found — run: make install-tools"; \
 	  exit 1; \
 	fi
 
@@ -44,7 +80,7 @@ shellcheck: ## Shellcheck install.sh and run.sh
 	if command -v shellcheck >/dev/null 2>&1; then \
 	  shellcheck install.sh run.sh; \
 	else \
-	  echo "shellcheck not found — install: brew install shellcheck (CI always runs it)"; \
+	  echo "shellcheck not found — run: make install-tools"; \
 	  exit 1; \
 	fi
 
@@ -69,8 +105,8 @@ doctor: ## Check dev tools (actionlint, shellcheck, gh). MODE=default|release
 	done; \
 	exit $$missing
 
-clean: ## Remove local temp artifacts
-	rm -rf .tmp
+clean: ## Remove local temp artifacts and installed tools
+	rm -rf .tmp .tools
 
 ##@ GitHub
 

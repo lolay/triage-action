@@ -16,14 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install actionlint
-        run: |
-          curl -sSfL "https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash" \
-            | bash -s -- 1.7.12
-          sudo mv actionlint /usr/local/bin/
-
-      - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      # actionlint + shellcheck at the Makefile pins (ACTIONLINT_VERSION,
+      # SHELLCHECK_VERSION) into .tools/bin, which make lint/shellcheck prefer.
+      - name: Install tools
+        run: make install-tools
 
       - name: make ci
         run: make ci

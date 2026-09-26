@@ -65,9 +65,10 @@ action release pins. See
 ## Developing
 
 ```bash
-make init      # verify layout
-make ci        # actionlint + shellcheck (same gate as CI)
-make doctor    # check for actionlint, shellcheck, gh
+make init           # verify layout
+make install-tools  # pinned actionlint + shellcheck into .tools/bin
+make ci             # actionlint + shellcheck (same gate as CI)
+make doctor         # check for actionlint, shellcheck, gh
 ```
 
 ## License

@@ -14,6 +14,7 @@ Runtime install/run on **consumer** GitHub Actions runners use `install.sh` and
 | --- | --- | --- |
 | `help` | Develop | List targets (default goal) |
 | `init` | Develop | Verify repo layout |
+| `install-tools` | Develop | Install `actionlint` (`ACTIONLINT_VERSION`, checksum-verified) and `shellcheck` (`SHELLCHECK_VERSION`) into `.tools/bin`; no-op when already at the pins |
 | `build` | Develop | Documented no-op (composite action — nothing to compile) |
 | `lint` | Develop | `actionlint` on `action.yml` and workflows |
 | `format` | Develop | Documented no-op (no shell formatter configured) |
@@ -22,7 +23,7 @@ Runtime install/run on **consumer** GitHub Actions runners use `install.sh` and
 | `ci` | Develop | Full pre-push gate (`test`) |
 | `pre-commit` | Develop | Alias of `ci` |
 | `doctor` | Develop | Check for `actionlint`, `shellcheck`, `gh` |
-| `clean` | Develop | Remove `.tmp/` |
+| `clean` | Develop | Remove `.tmp/` and `.tools/` |
 | `gh-runs-list` | GitHub | In-flight Actions runs (`status != completed`) |
 | `gh-runs-watch` | GitHub | Watch active runs to completion |
 | `gh-runs-status` | GitHub | Last completed run per workflow; `skipped`/`neutral` are not failures |
@@ -33,10 +34,24 @@ Runtime install/run on **consumer** GitHub Actions runners use `install.sh` and
 
 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) runs:
 
-1. `actionlint` (pinned binary)
-2. `shellcheck install.sh run.sh`
+1. `make install-tools` — actionlint + shellcheck at the Makefile pins
+2. `make ci` — `actionlint` + `shellcheck install.sh run.sh`
 3. Dogfood smoke: `uses: ./` against this repo's `triage.yaml` (installs the CLI
    version pinned in `VERSION` or overridden via the `version` input)
+
+## Tool pins and dependency updates
+
+The Makefile is the only place tool versions are pinned (`ACTIONLINT_VERSION`,
+`SHELLCHECK_VERSION`). `make lint` / `make shellcheck` put `.tools/bin` first on
+`PATH`, so the pinned binaries win once `make install-tools` has run.
+
+[Renovate](./renovate.json) extends the shared preset in
+[`lolay/triage` `.github/renovate-shared.json`](https://github.com/lolay/triage/blob/main/.github/renovate-shared.json)
+(weekly grouped minor/patch PR, GitHub Actions, the Makefile pins). This repo
+adds one rule: `VERSION` **follows** `lolay/triage` releases — Renovate opens a
+dedicated `triage CLI` PR as soon as the CLI releases (no cooldown, no
+auto-merge). Merge it, then `make tag VERSION=x.y.z CONFIRM_TAG=1` to release the
+action at the same version.
 
 ## Release workflow
 

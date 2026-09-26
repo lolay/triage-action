@@ -7,8 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- CI: `actions/checkout` v7 (was v6) and actionlint pinned to 1.7.12
-  (was 1.7.7) in `ci.yml` and the `Makefile`.
+- CI: `actions/checkout` v7 (was v6) and actionlint 1.7.12 (was 1.7.7).
+- Tool versions are pinned only in the `Makefile` (`ACTIONLINT_VERSION`,
+  `SHELLCHECK_VERSION`); CI installs them with `make install-tools` instead of
+  a duplicated actionlint version in `ci.yml` and an unpinned apt shellcheck.
+  shellcheck is now v0.11.0.
+
+### Added
+
+- `make install-tools`: installs pinned actionlint (checksum-verified) and
+  shellcheck into a gitignored `.tools/bin`, which `make lint`/`make shellcheck`
+  prefer over `PATH`.
+- Renovate: `renovate.json` extends the shared `lolay/triage` preset and makes
+  `VERSION` follow `lolay/triage` releases (dedicated PR, no cooldown).
 
 ## [0.4.0] - 2026-06-15
 
