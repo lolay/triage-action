@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Dogfood `triage.yaml` uses the structural `group:` + `items:` form; the
+  triage CLI 0.4.0 pinned in `VERSION` rejects a check that sets both `tool:`
+  and `group:`, which failed the dogfood smoke job.
+
 ### Changed
 
 - CI: `actions/checkout` v7 (was v6) and actionlint 1.7.12 (was 1.7.7).
