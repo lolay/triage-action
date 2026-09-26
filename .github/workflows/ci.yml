@@ -24,6 +24,17 @@ jobs:
       - name: make ci
         run: make ci
 
+  aw-check:
+    name: agentic workflows compiled
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Recompiles .github/workflows/agent-*.md with the pinned gh-aw
+      # (GH_AW_VERSION) and fails if any .lock.yml is stale.
+      - name: make aw-check
+        run: make aw-check
+
   dogfood:
     name: dogfood smoke
     runs-on: ubuntu-latest

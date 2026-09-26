@@ -20,6 +20,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   prefer over `PATH`.
 - Renovate: `renovate.json` extends the shared `lolay/triage` preset and makes
   `VERSION` follow `lolay/triage` releases (dedicated PR, no cooldown).
+- Agent state machine (ported from `lolay/nowline`, canonical doc in
+  `lolay/triage`): gh-aw phase workflows with prompts, verdict/label glue,
+  Copilot PR stamping and validation, label runbooks, `agent-labels.yml`, and
+  a local `.github/AGENT_TRIAGE.md` stub.
+- Renovate autofix: Renovate PRs are assigned to the Copilot coding agent, and
+  `renovate-autofix.yml` disables auto-merge and asks Copilot to fix a failing
+  Renovate PR (once per commit, at most three times per PR).
+- `copilot-setup-steps.yml`, `make aw-compile` / `make aw-check` (pinned
+  `GH_AW_VERSION`, CI-enforced), `AI_POLICY.md`, issue and PR templates.
 
 ## [0.4.0] - 2026-06-15
 

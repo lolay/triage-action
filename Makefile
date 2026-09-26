@@ -7,7 +7,7 @@ SHELL := bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init install-tools build lint format shellcheck test ci pre-commit doctor clean tag promote \
+.PHONY: help init install-tools aw-compile aw-check build lint format shellcheck test ci pre-commit doctor clean tag promote \
         gh-runs-list gh-runs-watch gh-runs-status
 
 define confirm
@@ -15,10 +15,11 @@ $(if $(CONFIRM_$(1)),,$(error Set CONFIRM_$(1)=1 to run $@))
 endef
 
 # Pinned tool versions — the single source of truth. CI installs both via
-# `make install-tools`; Renovate bumps these lines (custom managers in
+# `make install-tools` (gh-aw via `make aw-compile`); Renovate bumps these lines (custom managers in
 # lolay/triage .github/renovate-shared.json). Keep the `NAME ?= X.Y.Z` shape.
 ACTIONLINT_VERSION ?= 1.7.12
 SHELLCHECK_VERSION ?= v0.11.0
+GH_AW_VERSION ?= v0.74.8
 
 # Repo-local tool dir (gitignored). lint/shellcheck prefer it over PATH so the
 # pinned versions win once `make install-tools` has run.
@@ -61,6 +62,34 @@ install-tools: ## Install pinned actionlint + shellcheck into .tools/bin (no-op 
 	  curl -sSfL "https://github.com/koalaman/shellcheck/releases/download/$(SHELLCHECK_VERSION)/shellcheck-$(SHELLCHECK_VERSION).$${os}.$${sc_arch}.tar.xz" \
 	    | tar -xJf - -C "$$tmp"; \
 	  mv "$$tmp/shellcheck-$(SHELLCHECK_VERSION)/shellcheck" "$(TOOLS_BIN)/shellcheck"; \
+	fi
+
+# The compiler runs with GitHub API lookups blocked on purpose: it then uses the
+# action pins built into GH_AW_VERSION instead of resolving floating tags live,
+# so the same sources always compile to byte-identical lock files (aw-check can
+# diff them). Bumping GH_AW_VERSION is how the pins move.
+aw-compile: ## Recompile gh-aw agent workflows (agent-*.md -> .lock.yml) with the pinned GH_AW_VERSION
+	@set -euo pipefail; \
+	bin="$(TOOLS_BIN)/gh-aw"; \
+	if [ "$$("$$bin" version 2>/dev/null | awk '{print $$NF}')" != "$(GH_AW_VERSION)" ]; then \
+	  case "$$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; *) echo "unsupported OS: $$(uname -s)" >&2; exit 1 ;; esac; \
+	  case "$$(uname -m)" in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; *) echo "unsupported arch: $$(uname -m)" >&2; exit 1 ;; esac; \
+	  echo "Installing gh-aw $(GH_AW_VERSION) into $(TOOLS_BIN)..."; \
+	  tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
+	  base="https://github.com/github/gh-aw/releases/download/$(GH_AW_VERSION)"; \
+	  curl -sSfL -o "$$tmp/$$os-$$arch" "$$base/$$os-$$arch"; \
+	  curl -sSfL -o "$$tmp/checksums.txt" "$$base/checksums.txt"; \
+	  (cd "$$tmp" && grep " $$os-$$arch\$$" checksums.txt | { command -v sha256sum >/dev/null && sha256sum -c - || shasum -a 256 -c -; }); \
+	  mkdir -p "$(TOOLS_BIN)"; install -m 0755 "$$tmp/$$os-$$arch" "$$bin"; \
+	fi; \
+	HTTPS_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 NO_PROXY= \
+	  "$$bin" compile --no-check-update
+
+aw-check: aw-compile ## Fail if the gh-aw lock files are stale (CI runs this)
+	@changes="$$(git status --porcelain --untracked-files=all -- .github/workflows .github/aw)"; \
+	if [ -n "$$changes" ]; then \
+	  echo "$$changes"; \
+	  echo "gh-aw lock files are out of date — run 'make aw-compile' and commit the result" >&2; exit 1; \
 	fi
 
 build: ## No-op: composite action ships bash + action.yml, nothing to compile

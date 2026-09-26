@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Problem with the triage CLI itself
+    url: https://github.com/lolay/triage/issues/new/choose
+    about: Check results, output format, and config problems belong in lolay/triage.
+  - name: Security vulnerability
+    url: https://github.com/lolay/triage-action/security/advisories/new
+    about: Report a security issue privately. Please do not open a public issue.

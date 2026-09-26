@@ -15,6 +15,8 @@ Runtime install/run on **consumer** GitHub Actions runners use `install.sh` and
 | `help` | Develop | List targets (default goal) |
 | `init` | Develop | Verify repo layout |
 | `install-tools` | Develop | Install `actionlint` (`ACTIONLINT_VERSION`, checksum-verified) and `shellcheck` (`SHELLCHECK_VERSION`) into `.tools/bin`; no-op when already at the pins |
+| `aw-compile` | Develop | Recompile gh-aw agent workflows (`agent-*.md` → `.lock.yml`) with the pinned `GH_AW_VERSION` |
+| `aw-check` | Develop | `aw-compile`, then fail if any lock file changed or is uncommitted (CI runs this) |
 | `build` | Develop | Documented no-op (composite action — nothing to compile) |
 | `lint` | Develop | `actionlint` on `action.yml` and workflows |
 | `format` | Develop | Documented no-op (no shell formatter configured) |
@@ -36,13 +38,14 @@ Runtime install/run on **consumer** GitHub Actions runners use `install.sh` and
 
 1. `make install-tools` — actionlint + shellcheck at the Makefile pins
 2. `make ci` — `actionlint` + `shellcheck install.sh run.sh`
+3. `make aw-check` (separate job) — gh-aw lock files match their sources
 3. Dogfood smoke: `uses: ./` against this repo's `triage.yaml` (installs the CLI
    version pinned in `VERSION` or overridden via the `version` input)
 
 ## Tool pins and dependency updates
 
 The Makefile is the only place tool versions are pinned (`ACTIONLINT_VERSION`,
-`SHELLCHECK_VERSION`). `make lint` / `make shellcheck` put `.tools/bin` first on
+`SHELLCHECK_VERSION`, `GH_AW_VERSION`). `make lint` / `make shellcheck` put `.tools/bin` first on
 `PATH`, so the pinned binaries win once `make install-tools` has run.
 
 [Renovate](./renovate.json) extends the shared preset in
@@ -52,6 +55,18 @@ adds one rule: `VERSION` **follows** `lolay/triage` releases — Renovate opens 
 dedicated `triage CLI` PR as soon as the CLI releases (no cooldown, no
 auto-merge). Merge it, then `make tag VERSION=x.y.z CONFIRM_TAG=1` to release the
 action at the same version.
+
+Renovate PRs are assigned to the Copilot coding agent. When CI fails on one,
+`renovate-autofix.yml` turns off its auto-merge and asks Copilot (via an
+`@copilot` comment) to fix it; a maintainer reviews and merges.
+
+## Agent workflows
+
+Issues can opt into the triage-estate agent state machine (triage → plan →
+implement → review, ported from `lolay/nowline`). The canonical reference is
+[`lolay/triage` `.github/AGENT_TRIAGE.md`](https://github.com/lolay/triage/blob/main/.github/AGENT_TRIAGE.md);
+this repo carries a [stub](./.github/AGENT_TRIAGE.md) and copies of the
+workflows, prompts, and runbooks.
 
 ## Release workflow
 
