@@ -1,0 +1,26 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": ["local>lolay/triage//.github/renovate-shared"],
+    "packageRules": [
+        {
+            "matchPackageNames": ["lolay/triage"],
+            "groupName": "triage CLI",
+            "groupSlug": "triage-cli",
+            "commitMessageTopic": "triage CLI",
+            "minimumReleaseAge": "0 days",
+            "automerge": false,
+            "description": "This action follows lolay/triage: VERSION pins the CLI it installs and equals the action's own release version. Open a dedicated PR as soon as triage releases (no cooldown on our own releases); after merging, tag vX.Y.Z to release the action."
+        }
+    ],
+    "customManagers": [
+        {
+            "customType": "regex",
+            "description": "Track the triage CLI version pinned in VERSION (installed by install.sh when the `version` input is empty)",
+            "managerFilePatterns": ["/^VERSION$/"],
+            "matchStrings": ["^(?<currentValue>\\d+\\.\\d+\\.\\d+)\\s*$"],
+            "datasourceTemplate": "github-releases",
+            "depNameTemplate": "lolay/triage",
+            "extractVersionTemplate": "^v(?<version>\\d+\\.\\d+\\.\\d+)$"
+        }
+    ]
+}

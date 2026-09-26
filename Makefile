@@ -7,14 +7,24 @@ SHELL := bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init build lint format shellcheck test ci pre-commit doctor clean tag promote \
+.PHONY: help init install-tools aw-compile aw-check build lint format shellcheck test ci pre-commit doctor clean tag promote \
         gh-runs-list gh-runs-watch gh-runs-status
 
 define confirm
 $(if $(CONFIRM_$(1)),,$(error Set CONFIRM_$(1)=1 to run $@))
 endef
 
-ACTIONLINT_VERSION ?= 1.7.7
+# Pinned tool versions — the single source of truth. CI installs both via
+# `make install-tools` (gh-aw via `make aw-compile`); Renovate bumps these lines (custom managers in
+# lolay/triage .github/renovate-shared.json). Keep the `NAME ?= X.Y.Z` shape.
+ACTIONLINT_VERSION ?= 1.7.12
+SHELLCHECK_VERSION ?= v0.11.0
+GH_AW_VERSION ?= v0.74.8
+
+# Repo-local tool dir (gitignored). lint/shellcheck prefer it over PATH so the
+# pinned versions win once `make install-tools` has run.
+TOOLS_BIN ?= $(CURDIR)/.tools/bin
+export PATH := $(TOOLS_BIN):$(PATH)
 
 # Maximum recent runs to fetch for gh-runs-list / gh-runs-watch.
 GH_LIMIT ?= 50
@@ -27,6 +37,61 @@ help: ## Show this help
 init: ## Verify repo layout (no dependencies to download)
 	@test -f action.yml && test -f install.sh && test -f run.sh && test -f VERSION
 
+install-tools: ## Install pinned actionlint + shellcheck into .tools/bin (no-op if already pinned)
+	@set -euo pipefail; \
+	mkdir -p "$(TOOLS_BIN)"; \
+	case "$$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; *) echo "unsupported OS: $$(uname -s)" >&2; exit 1 ;; esac; \
+	case "$$(uname -m)" in x86_64|amd64) al_arch=amd64; sc_arch=x86_64 ;; arm64|aarch64) al_arch=arm64; sc_arch=aarch64 ;; *) echo "unsupported arch: $$(uname -m)" >&2; exit 1 ;; esac; \
+	tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
+	if [ "$$("$(TOOLS_BIN)/actionlint" -version 2>/dev/null | head -1)" = "$(ACTIONLINT_VERSION)" ]; then \
+	  echo "actionlint $(ACTIONLINT_VERSION) already installed"; \
+	else \
+	  echo "Installing actionlint $(ACTIONLINT_VERSION)..."; \
+	  base="https://github.com/rhysd/actionlint/releases/download/v$(ACTIONLINT_VERSION)"; \
+	  tarball="actionlint_$(ACTIONLINT_VERSION)_$${os}_$${al_arch}.tar.gz"; \
+	  curl -sSfL -o "$$tmp/$$tarball" "$$base/$$tarball"; \
+	  curl -sSfL -o "$$tmp/checksums.txt" "$$base/actionlint_$(ACTIONLINT_VERSION)_checksums.txt"; \
+	  (cd "$$tmp" && grep " $$tarball\$$" checksums.txt | { command -v sha256sum >/dev/null && sha256sum -c - || shasum -a 256 -c -; }); \
+	  tar -xzf "$$tmp/$$tarball" -C "$$tmp" actionlint; \
+	  mv "$$tmp/actionlint" "$(TOOLS_BIN)/actionlint"; \
+	fi; \
+	if "$(TOOLS_BIN)/shellcheck" --version 2>/dev/null | grep -qx "version: $(SHELLCHECK_VERSION:v%=%)"; then \
+	  echo "shellcheck $(SHELLCHECK_VERSION) already installed"; \
+	else \
+	  echo "Installing shellcheck $(SHELLCHECK_VERSION)..."; \
+	  curl -sSfL "https://github.com/koalaman/shellcheck/releases/download/$(SHELLCHECK_VERSION)/shellcheck-$(SHELLCHECK_VERSION).$${os}.$${sc_arch}.tar.xz" \
+	    | tar -xJf - -C "$$tmp"; \
+	  mv "$$tmp/shellcheck-$(SHELLCHECK_VERSION)/shellcheck" "$(TOOLS_BIN)/shellcheck"; \
+	fi
+
+# The compiler runs with GitHub API lookups blocked on purpose: it then uses the
+# action pins built into GH_AW_VERSION instead of resolving floating tags live,
+# so the same sources always compile to byte-identical lock files (aw-check can
+# diff them). Bumping GH_AW_VERSION is how the pins move.
+aw-compile: ## Recompile gh-aw agent workflows (agent-*.md -> .lock.yml) with the pinned GH_AW_VERSION
+	@set -euo pipefail; \
+	bin="$(TOOLS_BIN)/gh-aw"; \
+	if [ "$$("$$bin" version 2>/dev/null | awk '{print $$NF}')" != "$(GH_AW_VERSION)" ]; then \
+	  case "$$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; *) echo "unsupported OS: $$(uname -s)" >&2; exit 1 ;; esac; \
+	  case "$$(uname -m)" in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; *) echo "unsupported arch: $$(uname -m)" >&2; exit 1 ;; esac; \
+	  echo "Installing gh-aw $(GH_AW_VERSION) into $(TOOLS_BIN)..."; \
+	  tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
+	  base="https://github.com/github/gh-aw/releases/download/$(GH_AW_VERSION)"; \
+	  curl -sSfL -o "$$tmp/$$os-$$arch" "$$base/$$os-$$arch"; \
+	  curl -sSfL -o "$$tmp/checksums.txt" "$$base/checksums.txt"; \
+	  (cd "$$tmp" && grep " $$os-$$arch\$$" checksums.txt | { command -v sha256sum >/dev/null && sha256sum -c - || shasum -a 256 -c -; }); \
+	  mkdir -p "$(TOOLS_BIN)"; install -m 0755 "$$tmp/$$os-$$arch" "$$bin"; \
+	fi; \
+	HTTPS_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 NO_PROXY= \
+	  "$$bin" compile --no-check-update
+
+aw-check: aw-compile ## Fail if the gh-aw lock files are stale (CI runs this)
+	@changes="$$(git status --porcelain --untracked-files=all -- .github/workflows .github/aw)"; \
+	if [ -n "$$changes" ]; then \
+	  echo "$$changes"; \
+	  echo "gh-aw lock files are out of date — run 'make aw-compile' and commit the result" >&2; exit 1; \
+	fi
+
 build: ## No-op: composite action ships bash + action.yml, nothing to compile
 	@echo "nothing to build (composite action — bash + action.yml)"
 
@@ -35,7 +100,7 @@ lint: ## actionlint on action.yml and workflow files
 	if command -v actionlint >/dev/null 2>&1; then \
 	  actionlint; \
 	else \
-	  echo "actionlint not found — install: brew install actionlint (CI always runs it)"; \
+	  echo "actionlint not found — run: make install-tools"; \
 	  exit 1; \
 	fi
 
@@ -44,7 +109,7 @@ shellcheck: ## Shellcheck install.sh and run.sh
 	if command -v shellcheck >/dev/null 2>&1; then \
 	  shellcheck install.sh run.sh; \
 	else \
-	  echo "shellcheck not found — install: brew install shellcheck (CI always runs it)"; \
+	  echo "shellcheck not found — run: make install-tools"; \
 	  exit 1; \
 	fi
 
@@ -69,8 +134,8 @@ doctor: ## Check dev tools (actionlint, shellcheck, gh). MODE=default|release
 	done; \
 	exit $$missing
 
-clean: ## Remove local temp artifacts
-	rm -rf .tmp
+clean: ## Remove local temp artifacts and installed tools
+	rm -rf .tmp .tools
 
 ##@ GitHub
 

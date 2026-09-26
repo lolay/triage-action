@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a problem with the triage GitHub Action (install, inputs, outputs, exit codes).
+title: "bug: <short summary>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. If the problem is in the triage CLI itself (a check's result, output format), please file it in [lolay/triage](https://github.com/lolay/triage/issues/new/choose) instead.
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow step that reproduces the problem
+      description: The `uses: lolay/triage-action@...` step with its inputs.
+      render: yaml
+      placeholder: |
+        - uses: lolay/triage-action@v0
+          with:
+            profile: ci
+            json: true
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Step log output
+      description: The failing step's log, including the install and run output.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      description: Cite `specs/action.md` in lolay/triage if you can.
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Action ref, resolved CLI version, and runner
+      placeholder: "@v0 (VERSION 0.4.0), ubuntu-latest"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: agent-first-pass
+    attributes:
+      label: Agent first pass
+      description: |
+        Checking this box adds the `agent-triage` label, which enters this issue into the agent state machine: an agent triages, plans, and (if appropriate) opens a fix PR for a maintainer to review. See [`.github/AGENT_TRIAGE.md`](https://github.com/lolay/triage/blob/main/.github/AGENT_TRIAGE.md).
+      options:
+        - label: Let an AI agent take a first pass at this issue.
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched existing issues for this problem.
+          required: true

@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose a new input, output, or behavior for the triage GitHub Action.
+title: "feat: <short summary>"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The action's contract (inputs, version resolution, exit codes) is defined in [lolay/triage `specs/action.md`](https://github.com/lolay/triage/blob/main/specs/action.md). New CLI flags belong in [lolay/triage](https://github.com/lolay/triage/issues/new/choose); the `args` input already passes any flag through.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape
+      description: The workflow step you'd like to write.
+      render: yaml
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: agent-first-pass
+    attributes:
+      label: Agent first pass
+      description: |
+        Checking this box adds the `agent-triage` label, which enters this issue into the agent state machine. Contract changes are discuss-first (see `AI_POLICY.md`), so expect the agent to route those to a maintainer. See [`.github/AGENT_TRIAGE.md`](https://github.com/lolay/triage/blob/main/.github/AGENT_TRIAGE.md).
+      options:
+        - label: Let an AI agent take a first pass at this issue.
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched existing issues for similar proposals.
+          required: true
