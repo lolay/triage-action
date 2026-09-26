@@ -29,6 +29,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Renovate PR (once per commit, at most three times per PR).
 - `copilot-setup-steps.yml`, `make aw-compile` / `make aw-check` (pinned
   `GH_AW_VERSION`, CI-enforced), `AI_POLICY.md`, issue and PR templates.
+- Agent models: `claude-opus-5.5` for plan and deep implementation,
+  `claude-sonnet-5` for triage, fast implementation, and review. nowline's
+  `claude-sonnet-4.5` was deprecated in Copilot on 2026-09-01.
 
 ## [0.4.0] - 2026-06-15
 
