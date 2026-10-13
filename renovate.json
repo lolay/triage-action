@@ -8,8 +8,9 @@
             "groupSlug": "triage-cli",
             "commitMessageTopic": "triage CLI",
             "minimumReleaseAge": "0 days",
-            "automerge": false,
-            "description": "This action follows lolay/triage: VERSION pins the CLI it installs and equals the action's own release version. Open a dedicated PR as soon as triage releases (no cooldown on our own releases); after merging, tag vX.Y.Z to release the action."
+            "schedule": ["at any time"],
+            "automerge": true,
+            "description": "This action follows lolay/triage: VERSION pins the CLI it installs and equals the action's own release version. Open a dedicated PR as soon as triage releases (no cooldown, and outside the shared Friday schedule) and automerge it once CI passes; release.yml then tags vX.Y.Z on main."
         }
     ],
     "customManagers": [

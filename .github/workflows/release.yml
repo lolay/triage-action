@@ -1,39 +1,144 @@
 # Release pipeline for lolay/triage-action.
 #
-# Trigger: push an exact semver tag vX.Y.Z (`make tag VERSION=x.y.z CONFIRM_TAG=1`).
+# The root VERSION file pins the triage CLI the action installs, and the
+# action's release version equals it. An exact tag is immutable, so VERSION
+# must already be right on the commit that gets tagged: this workflow tags the
+# commit that carries the bump and never writes VERSION itself.
 #
-# The root VERSION file pins the triage CLI the action installs and must
-# already equal the release version at the tagged commit: an exact tag is
-# immutable, so a VERSION fix committed after it would reach the floating tags
-# but never the exact one. Renovate's `triage CLI` PR bumps VERSION; merge it,
-# then tag. This workflow only verifies VERSION, then promotes the floating
-# tags vX.Y / vX to the tagged commit (remote pushes last, mirroring
-# lolay/triage release ordering).
+# Triggers:
+#   ci completed on main (workflow_run): the normal path. Renovate's
+#     `triage CLI` PR bumps VERSION and automerges once CI passes. When CI then
+#     passes on main and vVERSION does not exist yet, cut the CHANGELOG
+#     ([Unreleased] -> [X.Y.Z]), tag that commit vX.Y.Z, and push both.
+#   workflow_dispatch: the same on main's tip without waiting for CI (retry).
+#   push tag vX.Y.Z: manual fallback (`make tag VERSION=x.y.z CONFIRM_TAG=1`);
+#     only verifies VERSION at the tagged commit.
+#
+# Either way, vX.Y / vX are promoted to the release commit last (remote pushes
+# last, mirroring lolay/triage release ordering). Tags pushed here with
+# GITHUB_TOKEN do not re-trigger this workflow.
 #
 # See lolay/triage specs/action.md and specs/releasing.md.
 name: release
 
 on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
   push:
     # Exact versions only: floating vX.Y / vX pushes (make promote) must not
     # re-enter the release pipeline.
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-*"
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  tag-version:
+    name: tag VERSION
+    # A fork PR from a branch named main also reports head_branch main, so only
+    # a green push to this repo's main counts.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    # Two CI runs finishing together must not both try to tag. A queued run
+    # that gets replaced loses nothing: the newer one re-reads main.
+    concurrency:
+      group: release-tag-version
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      sha: ${{ steps.tag.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Tag main if its VERSION is unreleased
+        id: tag
+        env:
+          CI_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          # Release only the commit CI just passed, while it is still main's
+          # tip; the CI run on a newer tip releases instead.
+          if [ -n "$CI_SHA" ] && [ "$CI_SHA" != "$(git rev-parse HEAD)" ]; then
+            echo "main moved past ${CI_SHA}; leaving the release to its CI run"
+            exit 0
+          fi
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error file=VERSION::VERSION is '${VERSION}', not X.Y.Z"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          if [ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]; then
+            echo "${TAG} already exists; nothing to release"
+            exit 0
+          fi
+
+          git config user.name "triage-action-release-bot"
+          git config user.email "triage-action-release-bot@lolay.com"
+
+          # Cut [Unreleased] into the release section unless a maintainer
+          # already did. A release with no action changes gets one Changed line.
+          if ! grep -qF "## [${VERSION}]" CHANGELOG.md; then
+            awk -v ver="$VERSION" -v date="$(date -u +%Y-%m-%d)" '
+              state == 0 && $0 == "## [Unreleased]" {
+                print; print ""; print "## [" ver "] - " date; print ""
+                state = 1; next
+              }
+              state == 1 && /^[[:space:]]*$/ { next }
+              state == 1 {
+                if ($0 ~ /^## \[/) {
+                  print "### Changed"; print ""
+                  print "- Installs triage CLI " ver "; no other action changes."; print ""
+                }
+                state = 2
+              }
+              { print }
+              END { if (state == 0) exit 1 }
+            ' CHANGELOG.md > CHANGELOG.md.new || {
+              echo "::error file=CHANGELOG.md::no '## [Unreleased]' heading to cut ${VERSION} from"
+              exit 1
+            }
+            mv CHANGELOG.md.new CHANGELOG.md
+            git commit -q -m "chore: release ${VERSION}" CHANGELOG.md
+          fi
+
+          git tag "$TAG"
+          # Atomic: main never gets the release commit without its tag, or the
+          # reverse. If main moved meanwhile, both are rejected.
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/${TAG}"
+          {
+            echo "tag=${TAG}"
+            echo "sha=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+          echo "released ${TAG} at $(git rev-parse HEAD)"
+
   verify-version:
     name: verify VERSION
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.verify.outputs.tag }}
+      sha: ${{ steps.verify.outputs.sha }}
     steps:
       - uses: actions/checkout@v7
 
       - name: VERSION must match the tag
+        id: verify
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
@@ -44,40 +149,44 @@ jobs:
           fi
           PINNED="$(tr -d '[:space:]' < VERSION)"
           if [ "$PINNED" != "$VERSION" ]; then
-            echo "::error file=VERSION::${TAG} has VERSION ${PINNED}, so it installs triage ${PINNED}, not ${VERSION}. An exact tag cannot be fixed in place: delete ${TAG}, merge Renovate's 'triage CLI' PR that bumps VERSION to ${VERSION}, then run 'make tag VERSION=${VERSION} CONFIRM_TAG=1'. Floating tags were not moved."
+            echo "::error file=VERSION::${TAG} has VERSION ${PINNED}, so it installs triage ${PINNED}, not ${VERSION}. An exact tag cannot be fixed in place: delete ${TAG}; once Renovate's 'triage CLI' PR lands VERSION ${VERSION} on main, this workflow releases it. Floating tags were not moved."
             exit 1
           fi
           echo "VERSION ${PINNED} matches ${TAG}"
+          {
+            echo "tag=${TAG}"
+            echo "sha=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
 
   promote-floating-tags:
     name: promote floating tags
+    needs: [tag-version, verify-version]
+    # Exactly one of the needs runs per event. Promote after it only when it
+    # released a stable tag (no pre-release suffix).
     if: >-
-      startsWith(github.ref, 'refs/tags/v') &&
-      !contains(github.ref, '-')
-    needs: verify-version
+      !cancelled() && !failure() &&
+      (needs.tag-version.outputs.tag || needs.verify-version.outputs.tag) != '' &&
+      !contains(needs.tag-version.outputs.tag || needs.verify-version.outputs.tag, '-')
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: ${{ needs.tag-version.outputs.tag || needs.verify-version.outputs.tag }}
+      SHA: ${{ needs.tag-version.outputs.sha || needs.verify-version.outputs.sha }}
     steps:
-      # Default ref is the tag, so vX.Y / vX land on the verified commit, not
-      # on whatever main has moved to since.
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          ref: ${{ needs.tag-version.outputs.sha || needs.verify-version.outputs.sha }}
 
       - name: Force-push floating major/minor tags
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF#refs/tags/v}"
           VERSION="${TAG#v}"
           MAJOR="${VERSION%%.*}"
           MINOR="${VERSION%.*}"
 
-          git config user.name "triage-action-release-bot"
-          git config user.email "triage-action-release-bot@lolay.com"
-
-          git tag --force "v${MINOR}"
+          git tag --force "v${MINOR}" "$SHA"
           git push --force origin "v${MINOR}"
 
-          git tag --force "v${MAJOR}"
+          git tag --force "v${MAJOR}" "$SHA"
           git push --force origin "v${MAJOR}"

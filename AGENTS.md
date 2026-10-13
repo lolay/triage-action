@@ -44,8 +44,9 @@ git history, not the workspace wrapper.
   [`lolay/triage` `specs/action.md`](https://github.com/lolay/triage/blob/main/specs/action.md).
   Change the spec first (discuss-first, see `AI_POLICY.md`).
 - `VERSION` follows `lolay/triage` releases via Renovate; don't edit it by hand.
-- Releases and floating tags (`make tag`, `make promote`, `release.yml`) are
-  maintainer-only.
+- Releases are automatic: a `VERSION` bump that passes CI on `main` is tagged
+  by `release.yml`. Manual tagging and floating tags (`make tag`,
+  `make promote`) and edits to `release.yml` are maintainer-only.
 
 ## AI assistance and the agent flow
 
