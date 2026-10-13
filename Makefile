@@ -180,21 +180,34 @@ gh-runs-status: ## Show pass/fail of the last completed run per workflow
 
 ##@ Release
 
-tag: ## Create and push git tag VERSION=x.y.z (triggers release workflow)
+# An exact tag is immutable, so the VERSION file it carries (the CLI pin) must
+# already equal the release version when it is cut; release.yml re-checks.
+tag: ## Create and push git tag VERSION=x.y.z (triggers release workflow); HEAD's VERSION file must already be x.y.z
 	$(call confirm,TAG)
 	@test -n "$(VERSION)" || { echo "VERSION=x.y.z required" >&2; exit 1; }
+	@pinned="$$(git show HEAD:VERSION | tr -d '[:space:]')"; \
+	if [ "$$pinned" != "$(VERSION)" ]; then \
+	  echo "VERSION file at HEAD is $$pinned, not $(VERSION): merge Renovate's 'triage CLI' PR that bumps it, pull main, then tag" >&2; \
+	  exit 1; \
+	fi
 	git tag "v$(VERSION)"
 	git push origin "v$(VERSION)"
 
 ##@ Danger
 
-promote: ## Force-push floating tags vX.Y and vX for VERSION=x.y.z (CONFIRM_PROMOTE=1)
+promote: ## Force-push floating tags vX.Y and vX to the exact tag vVERSION (CONFIRM_PROMOTE=1)
 	$(call confirm,PROMOTE)
 	@test -n "$(VERSION)" || { echo "VERSION=x.y.z required" >&2; exit 1; }
 	@set -euo pipefail; \
+	commit="$$(git rev-parse --verify "v$(VERSION)^{commit}")"; \
+	pinned="$$(git show "$$commit:VERSION" | tr -d '[:space:]')"; \
+	if [ "$$pinned" != "$(VERSION)" ]; then \
+	  echo "v$(VERSION) carries VERSION $$pinned, not $(VERSION): refusing to point floating tags at it" >&2; \
+	  exit 1; \
+	fi; \
 	MAJOR="$${VERSION%%.*}"; \
 	MINOR="$${VERSION%.*}"; \
-	git tag --force "v$${MINOR}"; \
-	git tag --force "v$${MAJOR}"; \
+	git tag --force "v$${MINOR}" "$$commit"; \
+	git tag --force "v$${MAJOR}" "$$commit"; \
 	git push --force origin "v$${MINOR}"; \
 	git push --force origin "v$${MAJOR}"

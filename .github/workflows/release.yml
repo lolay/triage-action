@@ -1,64 +1,69 @@
 # Release pipeline for lolay/triage-action.
 #
-# Trigger: push a semver tag vX.Y.Z.
+# Trigger: push an exact semver tag vX.Y.Z (`make tag VERSION=x.y.z CONFIRM_TAG=1`).
 #
-# Remote pushes happen LAST: bump the root VERSION file (CLI pin), commit,
-# then promote floating tags vX.Y / vX — mirroring lolay/triage release ordering.
+# The root VERSION file pins the triage CLI the action installs and must
+# already equal the release version at the tagged commit: an exact tag is
+# immutable, so a VERSION fix committed after it would reach the floating tags
+# but never the exact one. Renovate's `triage CLI` PR bumps VERSION; merge it,
+# then tag. This workflow only verifies VERSION, then promotes the floating
+# tags vX.Y / vX to the tagged commit (remote pushes last, mirroring
+# lolay/triage release ordering).
 #
 # See lolay/triage specs/action.md and specs/releasing.md.
 name: release
 
 on:
   push:
+    # Exact versions only: floating vX.Y / vX pushes (make promote) must not
+    # re-enter the release pipeline.
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-env:
-  GIT_AUTHOR_NAME: triage-action-release-bot
-  GIT_AUTHOR_EMAIL: triage-action-release-bot@lolay.com
-  GIT_COMMITTER_NAME: triage-action-release-bot
-  GIT_COMMITTER_EMAIL: triage-action-release-bot@lolay.com
+  contents: read
 
 jobs:
-  bump-version:
-    name: bump VERSION
+  verify-version:
+    name: verify VERSION
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
-      - name: Write VERSION to match tag
+      - name: VERSION must match the tag
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
-          echo "$VERSION" > VERSION
-          git add VERSION
-          if git diff --cached --quiet; then
-            echo "VERSION already matches tag"
-          else
-            git commit -m "chore: bump VERSION to ${VERSION} for ${TAG}"
-            git push origin HEAD:main
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-.+)?$ ]]; then
+            echo "::error::${TAG} is not an exact vX.Y.Z release tag"
+            exit 1
           fi
+          PINNED="$(tr -d '[:space:]' < VERSION)"
+          if [ "$PINNED" != "$VERSION" ]; then
+            echo "::error file=VERSION::${TAG} has VERSION ${PINNED}, so it installs triage ${PINNED}, not ${VERSION}. An exact tag cannot be fixed in place: delete ${TAG}, merge Renovate's 'triage CLI' PR that bumps VERSION to ${VERSION}, then run 'make tag VERSION=${VERSION} CONFIRM_TAG=1'. Floating tags were not moved."
+            exit 1
+          fi
+          echo "VERSION ${PINNED} matches ${TAG}"
 
   promote-floating-tags:
     name: promote floating tags
     if: >-
       startsWith(github.ref, 'refs/tags/v') &&
       !contains(github.ref, '-')
-    needs: bump-version
+    needs: verify-version
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
+      # Default ref is the tag, so vX.Y / vX land on the verified commit, not
+      # on whatever main has moved to since.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: main
 
       - name: Force-push floating major/minor tags
         run: |

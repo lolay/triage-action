@@ -13,6 +13,6 @@ Additions for this repo:
   are defined by [`lolay/triage` `specs/action.md`](https://github.com/lolay/triage/blob/main/specs/action.md),
   which must change in the same breath.
 - **`VERSION` is not hand-edited.** It follows `lolay/triage` releases through
-  Renovate and is set by the release workflow.
+  Renovate and is verified (never written) by the release workflow.
 - **Scripts stay portable bash** that passes the pinned shellcheck
   (`make pre-commit`).
