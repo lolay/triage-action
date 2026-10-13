@@ -12,15 +12,15 @@ Canonical contract (inputs, version resolution, asset mapping, exit codes):
 Pin the action with a floating or exact tag:
 
 ```yaml
-- uses: lolay/triage-action@v0.3    # latest 0.3.x (preferred pre-1.0)
+- uses: lolay/triage-action@v0.5    # latest 0.5.x (preferred pre-1.0)
 - uses: lolay/triage-action@v0      # latest 0.x
-- uses: lolay/triage-action@v0.3.0  # exact (immutable)
+- uses: lolay/triage-action@v0.5.0  # exact (immutable)
 ```
 
 Common CI step:
 
 ```yaml
-- uses: lolay/triage-action@v0.3
+- uses: lolay/triage-action@v0.5
   with:
     profile: ci
     strict: true
@@ -35,10 +35,10 @@ All inputs are optional. See the full table in
 
 | Input | Default | Purpose |
 | --- | --- | --- |
-| `version` | `VERSION` file | Override the CLI version to install (e.g. `0.3.0`) |
+| `version` | `VERSION` file | Override the CLI version to install (e.g. `0.5.0`) |
 | `profile` | default profile | Profile to run |
 | `config` | discovered config | Path to `triage.yaml` |
-| `strict` | `false` | Treat warnings as errors |
+| `strict` | `false` | Treat warnings as errors (including a tool below its recommended version) |
 | `severity` | `false` | Graded exit ladder |
 | `json` | `false` | Machine-readable output |
 | `quiet` | `false` | Hide passing checks |
