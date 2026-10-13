@@ -180,9 +180,10 @@ gh-runs-status: ## Show pass/fail of the last completed run per workflow
 
 ##@ Release
 
+# Releases normally tag themselves (release.yml, on green CI for a VERSION bump).
 # An exact tag is immutable, so the VERSION file it carries (the CLI pin) must
 # already equal the release version when it is cut; release.yml re-checks.
-tag: ## Create and push git tag VERSION=x.y.z (triggers release workflow); HEAD's VERSION file must already be x.y.z
+tag: ## Manual fallback: create and push git tag VERSION=x.y.z; HEAD's VERSION file must already be x.y.z
 	$(call confirm,TAG)
 	@test -n "$(VERSION)" || { echo "VERSION=x.y.z required" >&2; exit 1; }
 	@pinned="$$(git show HEAD:VERSION | tr -d '[:space:]')"; \

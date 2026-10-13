@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.5.0] - 2026-10-13
 
+### Added
+
+- Automatic releases. Renovate's `triage CLI` PR now opens as soon as the CLI
+  releases (it was held to the shared Friday-morning schedule) and automerges
+  once CI passes. When `ci` then passes on `main` and `v$(VERSION)` doesn't
+  exist yet, the release workflow cuts the CHANGELOG, tags the commit, and
+  promotes `vX.Y` / `vX`. `make tag` stays as a manual fallback.
+
 ### Fixed
 
 - Dogfood `triage.yaml` uses the structural `group:` + `items:` form; the
