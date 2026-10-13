@@ -29,8 +29,8 @@ Runtime install/run on **consumer** GitHub Actions runners use `install.sh` and
 | `gh-runs-list` | GitHub | In-flight Actions runs (`status != completed`) |
 | `gh-runs-watch` | GitHub | Watch active runs to completion |
 | `gh-runs-status` | GitHub | Last completed run per workflow; `skipped`/`neutral` are not failures |
-| `tag` | Release | Create + push `v$(VERSION)` (`CONFIRM_TAG=1`) |
-| `promote` | Danger | Force-push floating `vX.Y` / `vX` (`CONFIRM_PROMOTE=1`) |
+| `tag` | Release | Create + push `v$(VERSION)` (`CONFIRM_TAG=1`); refuses unless `VERSION` at `HEAD` already equals `$(VERSION)` |
+| `promote` | Danger | Force-push floating `vX.Y` / `vX` to the exact tag `v$(VERSION)` (`CONFIRM_PROMOTE=1`); refuses if that tag's `VERSION` doesn't match |
 
 ## CI workflow
 
@@ -54,7 +54,7 @@ The Makefile is the only place tool versions are pinned (`ACTIONLINT_VERSION`,
 adds one rule: `VERSION` **follows** `lolay/triage` releases — Renovate opens a
 dedicated `triage CLI` PR as soon as the CLI releases (no cooldown, no
 auto-merge). Merge it, then `make tag VERSION=x.y.z CONFIRM_TAG=1` to release the
-action at the same version.
+action at the same version (see [Release workflow](#release-workflow)).
 
 Renovate PRs are assigned to the Copilot coding agent. When CI fails on one,
 `renovate-autofix.yml` turns off its auto-merge and asks Copilot (via an
@@ -70,12 +70,25 @@ workflows, prompts, and runbooks.
 
 ## Release workflow
 
-[`.github/workflows/release.yml`](./.github/workflows/release.yml) triggers on
-tag push `v*`:
+`VERSION` pins the triage CLI the action installs and equals the action's
+release version. An exact tag is immutable, so `VERSION` has to be right
+*before* the tag is cut:
 
-1. Write/bump the root `VERSION` file to match the tagged CLI semver (coordinated
-   with `lolay/triage`)
-2. Promote floating tags `vX.Y` and `vX` (remote pushes last)
+1. Merge Renovate's `triage CLI` PR, which bumps `VERSION` to `x.y.z`.
+2. Pull `main`, then `make tag VERSION=x.y.z CONFIRM_TAG=1`. It refuses unless
+   `VERSION` at `HEAD` already equals `x.y.z`.
+
+[`.github/workflows/release.yml`](./.github/workflows/release.yml) then runs on
+the exact tag push `vX.Y.Z` (floating `vX.Y` / `vX` pushes don't trigger it):
+
+1. `verify-version`: fail unless the root `VERSION` file at the tagged commit
+   equals `X.Y.Z`. The workflow verifies `VERSION`; it never writes it, since a
+   fix committed after the tag would reach `vX.Y` / `vX` but never `vX.Y.Z`.
+2. `promote-floating-tags` (needs step 1; skipped for pre-release tags): point
+   `vX.Y` and `vX` at the tagged commit (remote pushes last).
+
+If verification fails, the floating tags haven't moved. Delete the bad exact
+tag before anyone pins it, merge the `VERSION` bump, and tag again.
 
 See the CLI repo's [`specs/action.md`](https://github.com/lolay/triage/blob/main/specs/action.md)
 for the full action contract and coordinated versioning rules.
