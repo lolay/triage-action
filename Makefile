@@ -19,7 +19,7 @@ endef
 # lolay/triage .github/renovate-shared.json). Keep the `NAME ?= X.Y.Z` shape.
 ACTIONLINT_VERSION ?= 1.7.12
 SHELLCHECK_VERSION ?= v0.11.0
-GH_AW_VERSION ?= v0.74.8
+GH_AW_VERSION ?= v0.84.4
 
 # Repo-local tool dir (gitignored). lint/shellcheck prefer it over PATH so the
 # pinned versions win once `make install-tools` has run.
