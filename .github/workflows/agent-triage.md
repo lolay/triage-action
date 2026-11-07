@@ -10,6 +10,9 @@ if: github.event.label.name == 'agent-triage'
 engine:
   id: copilot
   model: claude-sonnet-5
+runtimes:
+  node:
+    version: "26.11.1"
 imports:
   - shared/agentic-prelude.md
 safe-outputs:
