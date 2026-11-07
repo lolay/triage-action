@@ -10,6 +10,9 @@ if: contains(github.event.pull_request.labels.*.name, 'copilot-pr')
 engine:
   id: copilot
   model: claude-sonnet-5
+runtimes:
+  node:
+    version: "26.11.1"
 imports:
   - shared/agentic-prelude.md
 safe-outputs:

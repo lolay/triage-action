@@ -7,6 +7,9 @@ if: github.event.label.name == 'agent-deep'
 engine:
   id: copilot
   model: claude-opus-5.5
+runtimes:
+  node:
+    version: "26.11.1"
 imports:
   - shared/agentic-prelude.md
 safe-outputs:
